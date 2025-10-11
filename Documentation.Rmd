@@ -34,3 +34,81 @@ This dataset contains information about calls made to the police and the corresp
 13. **Blurred_Latitude** – Geographic latitude of the event.
 
 The dataset provides detailed information on all calls received by the police, including call types, priorities, call and response times, as well as the geographic locations of the incidents. It also includes the initial and final classification of each call, enabling analysis of how incidents are categorized and resolved.
+
+# Initial Data Preparation
+
+## Loading and Preparing the Necessary Libraries
+
+```{r eval=T, results='hide', include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(ggmap)
+library(sparklyr)
+
+Sys.setenv(JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64")
+
+#spark_install(version = "3.5")
+conf <- spark_config()
+conf$`sparklyr.shell.driver-memory` <- "16G"
+conf$spark.memory.fraction <- 0.9
+
+sc <- spark_connect(master = "local", 
+                    version = "3.5",
+                    config = conf)
+```
+
+## Data Loading
+
+-   Given the size of the dataset (5.6 GB), the data is loaded and further transformed using Apache Spark tools.
+
+-   To ensure the correct data types are used, a schema is specified according to which Spark loads the data frames.
+
+```{r eval = T, results = 'hold'}
+schema <- list(
+  CAD.Event.Number = "character",
+  Event.Clearance.Description = "character",
+  Call.Type = "character",
+  Priority = "character",
+  Initial.Call.Type = "character",
+  Final.Call.Type = "character",
+  Original.Time.Queued = "character",
+  Arrived.Time = "character",
+  Precinct = "character",
+  Sector = "character",
+  Beat = "character",
+  Blurred_Longitude = "numeric",
+  Blurred_Latitude = "numeric"
+)
+
+df <- spark_read_csv(sc, name = "police_calls", path = "Call_Data.csv", header = TRUE, columns = schema)
+```
+
+## Data Preparation for Analysis
+
+-   In order to perform a proper data analysis, it is necessary to carry out several transformations on the initial dataset:
+  
+### Removing All Missing Values from the Dataset
+
+```{r eval=T, results='hold'}
+df_clean <- df %>% na.omit()
+```
+
+### Converting Data to the Appropriate Format
+
+```{r eval = T, results='hold'}
+df_clean <- df_clean %>%
+  mutate(
+    Original_Time_Queued = to_timestamp(Original_Time_Queued, "MM/dd/yyyy hh:mm:ss a"),
+    Arrived_Time = to_timestamp(Arrived_Time, "MM/dd/yyyy hh:mm:ss a")
+  )
+```
+
+### Filtering Cases Where the Police Arrival Time Precedes the Incident Time
+
+-   This is an impossible case
+
+```{r}
+df_clean <- df_clean %>%
+  filter(!is.na(Original_Time_Queued) & !is.na(Arrived_Time) & Original_Time_Queued < Arrived_Time)
+```
