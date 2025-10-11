@@ -19,14 +19,14 @@ The dataset on police incidents in the City of Seattle includes a collection of 
 
 This dataset contains information about calls made to the police and the corresponding police responses in Seattle. The columns in the dataset are as follows:
 
-1.  **CAD.Event.Number** – Unique event identification number.
-2.  **Event.Clearance.Description** – How the police resolved the event.
-3.  **Call.Type** – Type of call with 10 different values (911, Alarm, Onview, etc.)
+1.  **CAD Event Number** – Unique event identification number.
+2.  **Event Clearance Description** – How the police resolved the event.
+3.  **Call Type** – Type of call with 10 different values (911, Alarm, Onview, etc.)
 4.  **Priority** – Call priority with values ranging from 1 (lowest priority) to 9 (highest priority).
-5.  **Initial.Call.Type** – Initial classification of the call by the 911 call center operator, with 325 different values.
-6.  **Final.Call.Type** – Final classification of the call by the police officer after review, with 431 different values.
-7.  **Original.Time.Queued** – Time when the call was recorded.
-8.  **Arrived.Time** – Time when the police arrived at the scene.
+5.  **Initial Call Type** – Initial classification of the call by the 911 call center operator, with 325 different values.
+6.  **Final Call Type** – Final classification of the call by the police officer after review, with 431 different values.
+7.  **Original Time Queued** – Time when the call was recorded.
+8.  **Arrived Time** – Time when the police arrived at the scene.
 9.  **Precinct** – Police station in Seattle.
 10. **Sector** – Police sector.
 11. **Beat** – The area and time during which a police officer is on patrol.
@@ -46,7 +46,6 @@ library(knitr)
 library(ggmap)
 library(sparklyr)
 
-Sys.setenv(JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64")
 
 #spark_install(version = "3.5")
 conf <- spark_config()
@@ -66,14 +65,14 @@ sc <- spark_connect(master = "local",
 
 ```{r eval = T, results = 'hold'}
 schema <- list(
-  CAD.Event.Number = "character",
-  Event.Clearance.Description = "character",
-  Call.Type = "character",
+  CAD_Event_Number = "character",
+  Event_Clearance_Description = "character",
+  Call_Type = "character",
   Priority = "character",
-  Initial.Call.Type = "character",
-  Final.Call.Type = "character",
-  Original.Time.Queued = "character",
-  Arrived.Time = "character",
+  Initial_Call_Type = "character",
+  Final_Call_Type = "character",
+  Original_Time_Queued = "character",
+  Arrived_Time = "character",
   Precinct = "character",
   Sector = "character",
   Beat = "character",
@@ -82,6 +81,12 @@ schema <- list(
 )
 
 df <- spark_read_csv(sc, name = "police_calls", path = "Call_Data.csv", header = TRUE, columns = schema)
+
+df %>% 
+  select(Original_Time_Queued, Arrived_Time) %>% 
+  head(20) %>% 
+  collect() %>%
+  print()
 ```
 
 ## Data Preparation for Analysis
@@ -100,8 +105,13 @@ df_clean <- df %>% na.omit()
 df_clean <- df_clean %>%
   mutate(
     Original_Time_Queued = to_timestamp(Original_Time_Queued, "MM/dd/yyyy hh:mm:ss a"),
-    Arrived_Time = to_timestamp(Arrived_Time, "MM/dd/yyyy hh:mm:ss a")
+    Arrived_Time = to_timestamp(Arrived_Time, "yyyy MMM dd hh:mm:ss a")
   )
+
+df_clean %>%
+  select(Original_Time_Queued, Arrived_Time) %>%
+  head(5) %>%
+  collect()
 ```
 
 ### Filtering Cases Where the Police Arrival Time Precedes the Incident Time
@@ -111,4 +121,32 @@ df_clean <- df_clean %>%
 ```{r}
 df_clean <- df_clean %>%
   filter(!is.na(Original_Time_Queued) & !is.na(Arrived_Time) & Original_Time_Queued < Arrived_Time)
+```
+
+# Visualization of the Distribution of Individual Features and Relationships Between Features
+
+### Displaying Statistical Information on Incident Times
+
+```{r}
+df_clean %>% summarise(
+  min_original_time = min(Original_Time_Queued, na.rm = TRUE),
+  max_original_time = max(Original_Time_Queued, na.rm = TRUE),
+  min_arrived_time = min(Arrived_Time, na.rm = TRUE),
+  max_arrived_time = max(Arrived_Time, na.rm = TRUE)
+) %>% collect()
+```
+
+### Visualization of the Distribution by Police Precincts:
+
+```{r}
+precinct_counts <- df_clean %>%
+  group_by(Precinct) %>%
+  summarise(Count = n())
+
+ggplot(precinct_counts, aes(x = Precinct, y = Count, fill = Precinct)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Prikaz raspodele po policijskim upravama",
+       x = "Policijska uprava",
+       y = "Broj pojava",
+       fill = "Precinct")
 ```
