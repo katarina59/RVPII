@@ -1,0 +1,36 @@
+---
+title: "Analysis of Police Incidents in the City of Seattle"
+author: "Katarina Medic"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+```
+
+### Dataset on Police Incidents in the City of Seattle
+
+The dataset on police incidents in the City of Seattle includes a collection of events related to 911 emergency calls recorded from 2010 to the present day. The dataset contains approximately 6 million records and has a total size of 5.6GB. It is an open dataset obtained from the official website of the City of Seattle and is available at the following
+[link](https://data.seattle.gov/Public-Safety/Call-Data/33kz-ixgy/about_data).
+
+This dataset contains information about calls made to the police and the corresponding police responses in Seattle. The columns in the dataset are as follows:
+
+1.  **CAD.Event.Number** – Unique event identification number.
+2.  **Event.Clearance.Description** – How the police resolved the event.
+3.  **Call.Type** – Type of call with 10 different values (911, Alarm, Onview, etc.)
+4.  **Priority** – Call priority with values ranging from 1 (lowest priority) to 9 (highest priority).
+5.  **Initial.Call.Type** – Initial classification of the call by the 911 call center operator, with 325 different values.
+6.  **Final.Call.Type** – Final classification of the call by the police officer after review, with 431 different values.
+7.  **Original.Time.Queued** – Time when the call was recorded.
+8.  **Arrived.Time** – Time when the police arrived at the scene.
+9.  **Precinct** – Police station in Seattle.
+10. **Sector** – Police sector.
+11. **Beat** – The area and time during which a police officer is on patrol.
+12. **Blurred_Longitude** – Geographic longitude of the event.
+13. **Blurred_Latitude** – Geographic latitude of the event.
+
+The dataset provides detailed information on all calls received by the police, including call types, priorities, call and response times, as well as the geographic locations of the incidents. It also includes the initial and final classification of each call, enabling analysis of how incidents are categorized and resolved.
