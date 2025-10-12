@@ -46,13 +46,15 @@ library(knitr)
 library(ggmap)
 library(sparklyr)
 
+Sys.setenv(JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64")
 
 #spark_install(version = "3.5")
 conf <- spark_config()
-conf$`sparklyr.shell.driver-memory` <- "16G"
-conf$spark.memory.fraction <- 0.9
+conf$`sparklyr.shell.driver-memory` <- "6G"
+conf$spark.memory.fraction <- 0.7
+conf$spark.sql.shuffle.partitions <- "20"
 
-sc <- spark_connect(master = "local", 
+sc <- spark_connect(master = "local[4]", 
                     version = "3.5",
                     config = conf)
 ```
@@ -82,11 +84,6 @@ schema <- list(
 
 df <- spark_read_csv(sc, name = "police_calls", path = "Call_Data.csv", header = TRUE, columns = schema)
 
-df %>% 
-  select(Original_Time_Queued, Arrived_Time) %>% 
-  head(20) %>% 
-  collect() %>%
-  print()
 ```
 
 ## Data Preparation for Analysis
@@ -132,17 +129,366 @@ df_clean %>% summarise(
 ) %>% collect()
 ```
 
-### Visualization of the Distribution by Police Precincts:
+### Visualization of the Distribution by Police Precincts
 
 ```{r}
 precinct_counts <- df_clean %>%
   group_by(Precinct) %>%
-  summarise(Count = n())
+  summarise(Count = n()) %>%
+  collect()
 
 ggplot(precinct_counts, aes(x = Precinct, y = Count, fill = Precinct)) +
   geom_bar(stat = "identity") +
-  labs(title = "Prikaz raspodele po policijskim upravama",
-       x = "Policijska uprava",
-       y = "Broj pojava",
+  labs(title = "Distribution by Police Precincts",
+       x = "Police Precinct",
+       y = "Number of Occurrences",
        fill = "Precinct")
+
+rm(precinct_counts)
+gc()
 ```
+
+- It can be observed that the highest number of police responses occurred in the northern and western precincts.
+
+
+### Visualization of the Distribution by Case Resolution Type
+
+```{r}
+clearence_counts <- df_clean %>%
+  group_by(Event_Clearance_Description) %>%
+  summarise(Count = n()) %>%
+  collect()
+
+clearence_counts <- clearence_counts %>% filter(Count >= 5000)
+
+ggplot(clearence_counts, aes(x = Event_Clearance_Description, y = Count, fill = Event_Clearance_Description)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution by Case Resolution Type",
+       x = "Resolution",
+       y = "Number of Occurrences",
+       fill = "Resolution Type") +
+  theme(axis.text.x = element_blank())
+
+rm(clearence_counts)
+gc()
+```
+
+### Visualization of the Distribution by Priority
+
+```{r}
+priority_counts <- df_clean %>%
+  group_by(Priority) %>%
+  summarise(Count = n())
+
+ggplot(priority_counts, aes(x = Priority, y = Count, fill = Priority)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution by Priority",
+       x = "Priority",
+       y = "Number of Occurrences",
+       fill = "Priority")
+
+rm(priority_counts)
+gc()
+```
+
+### Visualization of the Distribution by 911 Call Type
+
+```{r}
+call_type_counts <- df_clean %>%
+  group_by(Call_Type) %>%
+  summarise(Count = n())
+
+call_type_counts <- call_type_counts %>% filter(Count > 5000)
+
+ggplot(call_type_counts, aes(x = Call_Type, y = Count, fill = Call_Type)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution by Call Method",
+       x = "Call Method",
+       y = "Number of Occurrences",
+       fill = "Call Method") +
+  theme(axis.text.x = element_blank())
+
+rm(call_type_counts)
+gc()
+```
+
+### Visualization of the Distribution of Latitude and Longitude
+
+- By creating histograms for the location data, it can be observed that there are certain events with incorrectly specified latitude or longitude values. The following code snippet shows the distributions of latitude and longitude values, as well as the process of adjusting them to match the coordinates of the city of Seattle.
+
+```{r eval=T, results='hold'}
+location_sample <- df_clean %>%
+  select(Blurred_Longitude, Blurred_Latitude) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%
+  collect()
+
+
+ggplot(data = location_sample, aes(x = Blurred_Longitude)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Geographic Latitude",
+       x = "Geographic Latitude",
+       y = "Frequency")
+
+rm(location_sample)
+gc()
+```
+
+```{r eval=T, results='hold'}
+location_sample <- df_clean %>%
+  select(Blurred_Longitude, Blurred_Latitude) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%
+  collect()
+
+ggplot(data = location_sample, aes(x = Blurred_Latitude)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Geographic Longitude",
+       x = "Geographic Longitude",
+       y = "Frequency")
+
+rm(location_sample)
+gc()
+```
+
+- It can be observed from the histograms that there is a certain number of entities with incorrectly entered latitude and longitude coordinates. Since the number of such entities is not large, they can be removed from the dataset. This can be done as follows:
+
+```{r}
+df_clean_ll <- df_clean %>% filter(Blurred_Latitude >= 47 & Blurred_Latitude <= 48 & Blurred_Longitude >= -123 & Blurred_Longitude <= -122)
+```
+
+### Histograms of Latitude and Longitude Distribution for Cleaned Values
+
+```{r}
+# Sample 10% of cleaned location data for histogram
+location_clean_sample <- df_clean_ll %>%
+  select(Blurred_Longitude, Blurred_Latitude) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%
+  collect()
+
+ggplot(data = location_clean_sample, aes(x = Blurred_Longitude)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Cleaned Longitude",
+       x = "Longitude",
+       y = "Frequency")
+
+rm(location_clean_sample)
+gc()
+```
+
+```{r}
+# Sample 10% of cleaned location data for histogram
+location_clean_sample <- df_clean_ll %>%
+  select(Blurred_Longitude, Blurred_Latitude) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%
+  collect()
+
+ggplot(data = location_clean_sample, aes(x = Blurred_Latitude)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Cleaned Latitude",
+       x = "Latitude",
+       y = "Frequency")
+
+rm(location_clean_sample)
+gc()
+```
+
+- The distribution of these values can also be displayed on a map using the **ggmap** library and the Stadiamaps API key, as shown in the following code snippet:
+```{r eval = FALSE}
+# Setting the API key value
+register_stadiamaps("04c1350e-f51f-4265-b458-ad6b6a3192bb", write = TRUE)
+
+# Creating a map of Seattle
+seattle <- c(left = -122.45, bottom = 47.48, right = -122.2, top = 47.73)
+seattle_map <- get_stadiamap(seattle, zoom = 18)
+
+# Plotting the map
+ggmap(seattle_map) +
+  geom_point(data = df_clean_ll, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Final_Call_Type)) +
+  labs(title = "Map of Seattle City",
+       x = "Longitude",
+       y = "Latitude",
+       color = "Final Call Type")
+
+```{r}
+include_graphics("Images/PointsOnTheMap.png")
+```
+
+### Visualization of Category Distribution
+
+-   The next aspect to consider is the initial and final call categories represented by the columns Initial_Call_Type and  Final_Call_Type. Since Initial_Call_Type contains 287 different categories and Final_Call_Type contains 402 different categories, the idea is to group these categories into broader supercategories to make the data easier to analyze and visualize. The following code snippet shows the map_call_types function, which performs the grouping of these categories:
+
+```{r}
+df_collected <- df_clean_ll %>% 
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>% 
+  collect()
+
+print(length(unique(df_collected$Initial_Call_Type)))
+print(length(unique(df_collected$Final_Call_Type)))
+```
+
+-   The following code snippet shows the grouping of initial call categories into supercategories:
+
+```{r}
+df_clean_ll <- df_clean_ll %>%
+  mutate(Initial_Category = case_when(
+    grepl("ASLT|Assault|ASSAULT|ASSAULTS|HARRASMENT|THREAT|THREATS|WEAPON|GUN|PANHANDLING|HARASSMENT|VIOLENT", Initial_Call_Type) ~ "Assaults and Threats",
+    grepl("TRAFFICING|SEX|RAPE|PORNOGRAPHY|PROSTITUTION|LEWD|PROWLER", Initial_Call_Type) ~ "Sex Offenses",
+    grepl("NARCOTICS|DRUGS|MARIJUANA|OVERDOSE|OD|LIQUOR|DETOX|INTOX|LIQ", Initial_Call_Type) ~ "Narcotics",
+    grepl("HARBOR|ANIMAL|GAMBLING|WATER|TREES|NORAD|STADIUM|ILLEGAL DUMPING|SLEEPER|HAZ|BIAS|NUISANCE|URINATING|HOSPITAL|PHONE|CROWD|EVENT|DEMONSTRATIONS|DISTURBANCE|UNUSUAL|NOISE|POWER|LANDLINE|LITTERING", Initial_Call_Type) ~ "Civil incidents and security",
+    grepl("DOA|SHOTS|CASUALTY|FELONY|SUSPICIOUS|ESCAPE|FIRE|PURSUIT|SWAT|SHOOTING|SUICIDE|HOSTAGE|HOMICIDE", Initial_Call_Type) ~ "Emergency and Critical incidents",
+    grepl("ROBBERY|BURGLARY|PROPERTY|THEFT|BREAKING|SHOPLIFT|ARSON|TRESPASS|BURG|BURN|EXPLOSION|FRAUD", Initial_Call_Type) ~ "Property Crimes",
+    grepl("ALARM|ORDER|INSPECTION|WATCH", Initial_Call_Type) ~ "Alarm and Security",
+    grepl("ASSIST|CHECK|HELP|ASSIGNED|PATROL", Initial_Call_Type) ~ "Assistance and Checks",
+    grepl("DOMESTIC|ABUSE|CUSTODIAL|ARGUMENTS|DV", Initial_Call_Type) ~ "Domestic Violence",
+    grepl("Traffic|VIOLATIONS|ACCIDENT|MVC|CAR|DUI|TRAF|ROAD|VEHICLE|DUI|ACC|HIT AND RUN|", Initial_Call_Type) ~ "Traffic Incident",
+    grepl("MISSING|AWOL|FOUND|RUNAWAY|ABDUCTION|KIDNAP|CHILD|JUVENILE|LOST|AMBER|A.W.O.L.", Initial_Call_Type) ~ "Missing Persons",
+    grepl("OBS", Initial_Call_Type) ~ "Observation",
+    grepl("CANCELLED|NO ANSWER|OUT AT RANGE", Initial_Call_Type) ~ "No action",
+    TRUE ~ "Other"
+  ))
+```
+
+-   Application to the final call category as well:
+
+```{r}
+df_clean_ll <- df_clean_ll %>%
+  mutate(Final_Category = case_when(
+    grepl("ASLT|Assault|ASSAULT|ASSAULTS|HARRASMENT|THREAT|THREATS|WEAPON|GUN|PANHANDLING|HARASSMENT|VIOLENT", Final_Call_Type) ~ "Assaults and Threats",
+    grepl("TRAFFICING|SEX|RAPE|PORNOGRAPHY|PROSTITUTION|LEWD|PROWLER", Final_Call_Type) ~ "Sex Offenses",
+    grepl("NARCOTICS|DRUGS|MARIJUANA|OVERDOSE|OD|LIQUOR|DETOX|INTOX|LIQ", Final_Call_Type) ~ "Narcotics",
+    grepl("HARBOR|ANIMAL|GAMBLING|WATER|TREES|NORAD|STADIUM|ILLEGAL DUMPING|SLEEPER|HAZ|BIAS|NUISANCE|URINATING|HOSPITAL|PHONE|CROWD|EVENT|DEMONSTRATIONS|DISTURBANCE|UNUSUAL|NOISE|POWER|LANDLINE|LITTERING", Final_Call_Type) ~ "Civil incidents and security",
+    grepl("DOA|SHOTS|CASUALTY|FELONY|SUSPICIOUS|ESCAPE|FIRE|PURSUIT|SWAT|SHOOTING|SUICIDE|HOSTAGE|HOMICIDE", Final_Call_Type) ~ "Emergency and Critical incidents",
+    grepl("ROBBERY|BURGLARY|PROPERTY|THEFT|BREAKING|SHOPLIFT|ARSON|TRESPASS|BURG|BURN|EXPLOSION|FRAUD", Final_Call_Type) ~ "Property Crimes",
+    grepl("ALARM|ORDER|INSPECTION|WATCH", Final_Call_Type) ~ "Alarm and Security",
+    grepl("ASSIST|CHECK|HELP|ASSIGNED|PATROL", Final_Call_Type) ~ "Assistance and Checks",
+    grepl("DOMESTIC|ABUSE|CUSTODIAL|ARGUMENTS|DV", Final_Call_Type) ~ "Domestic Violence",
+    grepl("Traffic|VIOLATIONS|ACCIDENT|MVC|CAR|DUI|TRAF|ROAD|VEHICLE|DUI|ACC|HIT AND RUN|", Final_Call_Type) ~ "Traffic Incident",
+    grepl("MISSING|AWOL|FOUND|RUNAWAY|ABDUCTION|KIDNAP|CHILD|JUVENILE|LOST|AMBER|A.W.O.L.", Final_Call_Type) ~ "Missing Persons",
+    grepl("OBS", Final_Call_Type) ~ "Observation",
+    grepl("CANCELLED|NO ANSWER|OUT AT RANGE", Final_Call_Type) ~ "No action",
+    TRUE ~ "Other"
+  ))
+```
+
+-   Since it is possible that the initial categorization made by the 911 operator does not match the final categorization of the incident made by the police officer, the following diagram shows the distribution of cases where the final categorization matched the initial one, and vice versa:
+
+```{r}
+same_diff_counts <- df_clean_ll %>%
+  group_by(Same_Category = ifelse(Initial_Category == Final_Category, "Same", "Different")) %>%
+  summarise(Count = n())
+
+# Bar chart for displaying values
+ggplot(same_diff_counts, aes(x = Same_Category, y = Count, fill = Same_Category)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Comparison of Initial and Final Categories",
+       x = "Category",
+       y = "Number of Occurrences",
+       fill = "Category")
+
+rm(same_diff_counts)
+gc()
+```
+
+##### Distribution of Initial Categories
+
+```{r Distribution of initial categories after grouping}
+initial_category_counts <- df_clean_ll %>%
+  group_by(Initial_Category) %>%
+  summarise(Count = n())
+
+ggplot(initial_category_counts, aes(x = reorder(Initial_Category, -Count), y = Count, fill = Initial_Category)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of Initial Categorizations",
+       x = "Initial Category",
+       y = "Number of Occurrences") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+rm(initial_category_counts)
+gc()
+```
+
+##### Distribution of Final Categories
+
+```{r Distribution of final categories after grouping}
+final_category_counts <- df_clean_ll %>%
+  group_by(Final_Category) %>%
+  summarise(Count = n())
+
+ggplot(final_category_counts, aes(x = reorder(Final_Category, -Count), y = Count, fill = Final_Category)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of Final Categorizations",
+       x = "Final Category",
+       y = "Number of Occurrences") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+rm(final_category_counts)
+gc()
+```
+
+##### Visualization of the Final Call Category by Geographic Latitude and Longitude
+
+```{r Relationship between final category and geographic location}
+location_final_sample <- df_clean_ll %>%
+  select(Blurred_Longitude, Blurred_Latitude, Final_Category) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 1% of data
+  collect()
+
+ggplot(location_final_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Final_Category)) +
+  geom_point(alpha = 0.6) +  
+  labs(title = "Visualization of the Relationship Between Final Category and Call Location",
+       x = "Longitude",
+       y = "Latitude",
+       color = "Final Category") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+rm(location_final_sample)
+gc()
+```
+
+-   In the diagram above, it can be seen that the distribution of offense and crime categories does not depend on geographic latitude and longitude. Therefore, there is little point in attempting to perform clustering based on these values.
+
+### Visualization of the Relationship Between Sector and Call Location
+
+```{r Relationship between Seattle city sector and geographic location}
+location_final_sample <- df_clean_ll %>%
+  select(Blurred_Longitude, Blurred_Latitude, Sector) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 1% of data
+  collect()
+
+ggplot(location_final_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Sector)) +
+  geom_point(alpha = 0.6) +  
+  labs(title = "Visualization of the Relationship Between Sector and Call Location",
+       x = "Latitude",
+       y = "Longitude",
+       color = "Sector") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+rm(location_final_sample)
+gc()
+```
+
+### Visualization of the Relationship Between Police Precinct and Call Location
+
+```{r Relationship between police precinct and geographic location}
+location_final_sample <- df_clean_ll %>%
+  select(Blurred_Longitude, Blurred_Latitude, Precinct) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 1% of data
+  collect()
+
+ggplot(location_final_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Precinct)) +
+  geom_point(alpha = 0.6) +  
+  labs(title = "Visualization of the Relationship Between Police Precinct and Call Location",
+       x = "Latitude",
+       y = "Longitude",
+       color = "Police Precinct") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+rm(location_final_sample)
+gc()
+```
+
+-   On the other hand, it can be observed that the corresponding police precincts are responsible for responses in specific areas of the city, which makes this dataset suitable for clustering based on geographic location.
+  
+
