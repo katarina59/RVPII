@@ -116,6 +116,8 @@ df_clean <- df_clean %>%
   filter(!is.na(Original_Time_Queued) & !is.na(Arrived_Time) & Original_Time_Queued < Arrived_Time)
 ```
 
+rmarkdown::render("Documentation.Rmd")
+
 # Visualization of the Distribution of Individual Features and Relationships Between Features
 
 ### Displaying Statistical Information on Incident Times
@@ -491,4 +493,135 @@ gc()
 
 -   On the other hand, it can be observed that the corresponding police precincts are responsible for responses in specific areas of the city, which makes this dataset suitable for clustering based on geographic location.
   
+
+# Data Preparation for Classification
+
+- One possible approach for classification is to estimate the speed of police response based on the reported incident. Since many factors can influence response time—such as geographic location, police precinct sector, call category, active patrolling units, priority, and initial time—it is possible to label the data based on the `Arrival_Time` feature to indicate whether the response was fast or not, and then perform binary classification. To determine what constitutes a fast response versus a slow one, a histogram of five-minute intervals will first be presented to examine the distribution of occurrences.
+
+### Calculating Response Time to an Incident
+
+```{r}
+df_times <- df_clean_ll %>%
+  mutate(
+    Response_Time = (unix_timestamp(Arrived_Time) - unix_timestamp(Original_Time_Queued)) / 60
+  )
+```
+
+### Histogram Visualization to Examine the Distribution of Response Times
+
+```{r}
+# Plot histogram with 5-minute bins
+df_times_filtered <- df_times %>% filter(Response_Time >= 0 & Response_Time <= 1000)
+
+response_time_sample <- df_times_filtered %>%
+  select(Response_Time) %>%
+  sdf_sample(fraction = 0.1, replacement = FALSE) %>%
+  collect()
+
+ggplot(response_time_sample, aes(x = Response_Time)) +
+  geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Response Time",
+       x = "Response Time (minutes)",
+       y = "Frequency")
+
+rm(response_time_sample)
+gc()
+```
+
+- To perform binary classification, a new feature (label) `Response_Speed` was created with values 1 and 0. The values of this feature are assigned based on the median response time - `Response_Time`. All instances with a response time below the median are assigned a `Response_Speed` value of 1, representing a fast response, while the remaining instances are assigned a value of 0, representing a slow response. The following code demonstrates how this feature is created in the dataset:
+
+### Creating the Response Speed Label
+
+```{r}
+# Calculate median in Spark without collecting all data
+median_result <- df_times_filtered %>%
+  summarise(median_time = percentile_approx(Response_Time, 0.5)) %>%
+  collect()
+
+median_value <- median_result$median_time
+
+# Create Response_Speed label
+df_prepared <- df_times_filtered %>%
+  mutate(Response_Speed = if_else(Response_Time <= median_value, 1, 0))
+```
+
+### Distribution of Response Speed
+
+```{r}
+response_speeds <- df_prepared %>%
+  group_by(Response_Speed) %>%
+  summarise(Count = n()) %>%
+  collect()
+
+ggplot(response_speeds, aes(x = Response_Speed, y = Count, fill = Response_Speed)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of Response Speed",
+       x = "Response Speed",
+       y = "Number of Occurrences",
+       fill = "Response Speed")
+
+rm(response_speeds)
+gc()
+```
+
+### Visualization of the Relationship Between Predictor Features and the Target Feature
+
+- The next section aims to show how different values of the predictor features affect the speed of police response to a call. The following code snippet is intended to illustrate how priority, initial call category, location, and sector influence response times.
+
+```{r}
+viz_sample <- df_prepared %>%
+  select(Priority, Initial_Category, Blurred_Longitude, Blurred_Latitude, 
+         Sector, Response_Time, Response_Speed) %>%
+  sdf_sample(fraction = 0.05, replacement = FALSE) %>%
+  collect()
+
+ggplot(viz_sample, aes(x = Priority, y = Response_Time)) +
+  geom_boxplot() +
+  labs(title = "Response Time vs. Priority", x = "Priority", y = "Response Time")
+
+ggplot(viz_sample, aes(x = Initial_Category, y = Response_Time)) +
+  geom_boxplot() +
+  labs(title = "Response Time vs. Initial Category", x = "Initial Category", y = "Response Time") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(viz_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Response_Speed)) +
+  geom_point() +
+  labs(title = "Response Speed vs. Location", x = "Longitude", y = "Latitude", color = "Response Time")
+
+ggplot(viz_sample, aes(x = Sector, y = Response_Time)) +
+  geom_boxplot() +
+  labs(title = "Response Time vs. Sector", x = "Sector", y = "Response Time") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+rm(viz_sample)
+gc()
+```
+
+- It can be observed that events with high priority trigger a fast police response, which is expected.
+- Additionally, certain initial call categories, such as `Domestic Violence` and `Emergency` and `Critical Incidents`, also result in a quick response.
+- On the other hand, the correlation between response speed and geographic location is not very apparent, as there is a fairly uniform distribution of response times across different locations.
+
+
+# Classification
+
+### Preparing the Dataset for Training
+
+- Since the goal of the classification is to determine the speed of police response, the following predictor features were selected: `Response_Time`, `Sector`, `Precinct`, `Initial_Category`, `Longitude`, and `Latitude`.
+- The following code snippet shows the split of the dataset into training and validation sets:
+
+```{r Preparing the Dataset}
+df_prepared_split <- df_prepared %>%
+  select(Response_Time, Response_Speed, Sector, Precinct, Initial_Category, Blurred_Longitude, Blurred_Latitude, Priority) %>%
+  sdf_random_split(training = 0.8,
+                   test = 0.2,
+                   seed = 100)
+
+train_data <- df_prepared_split$training
+test_data <- df_prepared_split$test
+```
+
+### Logistic Regression
+
+- For the purpose of evaluating the logistic regression model and selecting the most suitable model, three scenarios were created with different values of the regularization parameter lambda.
+- The model was evaluated using the Area Under ROC metric, which represents the ability of a classification model to distinguish between the two classes.
 
