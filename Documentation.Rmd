@@ -625,3 +625,429 @@ test_data <- df_prepared_split$test
 - For the purpose of evaluating the logistic regression model and selecting the most suitable model, three scenarios were created with different values of the regularization parameter lambda.
 - The model was evaluated using the Area Under ROC metric, which represents the ability of a classification model to distinguish between the two classes.
 
+##### Model Preparation, Scenarios, and Training
+
+```{r Logistic Regression Model Preparation}
+# Logistic Regression
+log_pipeline <- sc %>% 
+  ml_pipeline() %>%
+  ft_r_formula(Response_Speed ~ .) %>%
+  ml_logistic_regression()
+
+param_grid <- list(
+  logistic_regression = list(reg_param = c(0.01, 0.1, 1))
+)
+
+lr_evaluator <- ml_binary_classification_evaluator(x = sc, metricName = "areaUnderROC")
+
+# Cross-validation
+logistic_cv <- ml_cross_validator(
+  x = sc, 
+  estimator = log_pipeline,
+  estimator_param_maps = param_grid,
+  evaluator = lr_evaluator,
+  num_folds = 5
+)
+
+print(logistic_cv)
+
+model_cv <- ml_fit(
+  x = logistic_cv,
+  dataset = df_prepared_split$training
+)
+
+cv_metrics <- ml_validation_metrics(model_cv)
+
+print(cv_metrics)
+```
+
+##### Display of Logistic Regression Model Performance for Different Scenarios
+
+``` {r}
+cv_metrics %>% 
+  ggplot(aes(reg_param_1, areaUnderROC)) + 
+  geom_line() + 
+  geom_smooth()
+```
+
+- By analyzing the diagram, it can be determined that the best performance is achieved with a regularization parameter value of 0.01.
+
+##### Selection of the Most Suitable Model
+
+```{r Testing the Performance of the Logistic Regression Model}
+# Na osnovu grafa se utvrdjuje da je model sa parametrom regularizacije 0.01 najbolji
+lmodel <- ml_logistic_regression(
+  df_prepared_split$training,
+  Response_Speed ~ .,
+  reg_param = 0.01
+)
+
+lrmx <- lmodel %>% 
+  ml_predict(df_prepared_split$test) %>% 
+  ml_metrics_binary()
+```
+
+### Random Forest algorithm
+
+- For the purpose of evaluating the random forest model and selecting the most suitable one, three scenarios were created with different numbers of trees.
+- The model was evaluated using the Area Under ROC metric, which represents the ability of a classification model to distinguish between the two classes.
+
+##### Preparation of the Random Forest Model
+
+```{r Preparation of the random forest model}
+# Random Forest
+rf_pipeline <- sc %>% 
+  ml_pipeline() %>%
+  ft_r_formula(Response_Speed ~ .) %>%
+  ml_random_forest_classifier()
+
+rf_grid <- list(
+  random_forest_classifier = list(  
+    num_trees = c(3, 25, 50)
+  )
+)
+
+rf_evaluator = ml_binary_classification_evaluator(x = sc, metricName = "areaUnderROC")
+
+# Cross-validation
+rf_cv <- ml_cross_validator(
+  x = sc, 
+  estimator = rf_pipeline,
+  estimator_param_maps = rf_grid,
+  evaluator = rf_evaluator, 
+  num_folds = 5
+)
+
+model_rf_cv <- ml_fit(
+  x = rf_cv,
+  dataset = df_prepared_split$training
+)
+
+rf_cv_metrics <- ml_validation_metrics(model_rf_cv)
+
+print(rf_cv_metrics)
+```
+
+##### Display of Random Forest Model Performance for Different Scenarios
+
+``` {r}
+rf_cv_metrics %>% 
+  ggplot(aes(num_trees_1, areaUnderROC)) + 
+  geom_line() + 
+  geom_smooth()
+```
+
+- It can be observed that performance improves with a larger number of trees.
+
+##### Selection of the Most Suitable Model
+
+```{r Testing the Performance of the Random Forest Model}
+# Selection of the Best Model
+
+rfmodel <- ml_random_forest_classifier(
+  df_prepared_split$training,
+  Response_Speed ~ .,
+  num_trees = 50
+)
+
+rfmx <- rfmodel %>% 
+  ml_predict(df_prepared_split$test) %>% 
+  ml_metrics_binary()
+```
+
+### Decision Trees
+
+- For the purpose of evaluating the decision tree model and selecting the most suitable one, three scenarios were created with different tree depths.
+- The model was evaluated using the Area Under ROC metric, which represents the ability of a classification model to distinguish between the two classes.
+
+```{r Preparation of the Decision Tree Model}
+dt_pipeline <- sc %>% 
+  ml_pipeline() %>%
+  ft_r_formula(Response_Speed ~ .) %>%
+  ml_decision_tree_classifier()
+
+dt_grid <- list(
+  decision_tree_classifier = list(
+    max_depth = c(3, 5, 10)
+  )
+)
+
+dt_evaluator <- ml_binary_classification_evaluator(x = sc, metricName = "areaUnderROC")
+
+# Cross-validation
+dt_cv <- ml_cross_validator(
+  x = sc, 
+  estimator = dt_pipeline,
+  estimator_param_maps = dt_grid,
+  evaluator = dt_evaluator, 
+  num_folds = 5
+)
+
+model_dt_cv <- ml_fit(
+  x = dt_cv,
+  dataset = df_prepared_split$training
+)
+
+dt_cv_metrics <- ml_validation_metrics(model_dt_cv)
+
+print(dt_cv_metrics)
+```
+
+##### Display of Decision Tree Model Performance for Different Scenarios
+
+``` {r}
+dt_cv_metrics %>% 
+  ggplot(aes(max_depth_1, areaUnderROC)) + 
+  geom_line() + 
+  geom_smooth()
+```
+
+- It can be observed that as the tree depth increases, the model's performance also improves.
+- However, it should be noted that increasing the tree depth also increases the risk of overfitting.
+
+##### Selection of the Most Suitable Model
+
+```{r Testing the Performance of the Decision Tree Model}
+# Izbor najpovoljnijeg modela
+
+dtmodel <- ml_decision_tree_classifier(
+  df_prepared_split$training,
+  Response_Speed ~ .,
+  max_depth = 5
+)
+
+dtmx <- dtmodel %>% 
+  ml_predict(df_prepared_split$test) %>% 
+  ml_metrics_binary()
+
+```
+
+### Evaluating the Classification Performance of Different Methods
+
+- To assess the performance of the different models, the Area Under ROC and Area Under PR metrics were used.
+
+```{r}
+
+metrics_df <- data.frame(
+  model = c("Logistic Regression", "Random Forest", "Decision Tree"),
+  auc_roc = NA, 
+  pr_auc = NA
+)
+
+# Fill in the metrics for each model
+metrics_df[1, "auc_roc"] <- lrmx$.estimate[1]
+metrics_df[1, "pr_auc"] <- lrmx$.estimate[2]
+
+metrics_df[2, "auc_roc"] <- rfmx$.estimate[1]
+metrics_df[2, "pr_auc"] <- rfmx$.estimate[2]
+
+metrics_df[3, "auc_roc"] <- dtmx$.estimate[1]
+metrics_df[3, "pr_auc"] <- dtmx$.estimate[2]
+
+print(metrics_df)
+
+ggplot(metrics_df, aes(x = model, y = auc_roc, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "ROC-AUC Comparison", y = "ROC-AUC") +
+  theme_minimal()
+
+ggplot(metrics_df, aes(x = model, y = pr_auc, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "PR-AUC Comparison", y = "PR-AUC") +
+  theme_minimal()
+```
+
+- The diagrams above show the relationship of these metrics across different models.
+- It can be observed that the random forest model provides the best performance.
+
+
+# Clustering
+
+- The idea is to perform clustering based on geographic latitude and longitude to determine whether there is any correlation between individual features and location within the city of Seattle. For example, one could try to determine if there is a relationship between the type of incident that occurred and certain areas of Seattle. Additionally, it is possible to establish a connection between the incident location and the police precinct responsible for that incident.
+- To perform clustering, the dataset must first be prepared for the algorithms.
+
+### Preparing the Data for Clustering
+
+- During dataset preparation, geographic latitude and longitude were extracted, as they will initially be used to determine an appropriate number of clusters.
+
+```{r}
+dataset.clustering <- df_times %>%
+  select(Blurred_Longitude, Blurred_Latitude, Final_Category, Precinct)
+
+```
+
+### Determining the Optimal Cluster Size Using the Elbow Method
+
+- To determine the most suitable number of clusters, the Elbow method was applied, which shows the sum of squared errors for specified numbers of clusters.
+
+```{r}
+# Function that calculates the within-cluster sum of squares
+
+calculate_wcss <- function(data, max_k) {
+  wcss <- numeric(max_k)
+  
+  for (kc in 2:max_k) {
+    model <- ml_bisecting_kmeans(data, ~Blurred_Longitude + Blurred_Latitude, k = kc, max_iter = 10)
+    wcss[kc] <- sum(model$cost)
+  }
+  
+  return(wcss)
+}
+
+max_k <- 20
+wcss_values <- calculate_wcss(dataset.clustering, max_k)
+
+wcss_df <- data.frame(
+  k = 1:max_k,
+  WCSS = wcss_values
+)
+
+ggplot(wcss_df, aes(x = k, y = WCSS)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Elbow Method for Determining the Optimal Number of Clusters",
+       x = "Number of Clusters (k)",
+       y = "Within-Cluster Sum of Squares (WCSS)") +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+```
+
+- It can be observed that for k = 7 and k = 10 there are significant drops in the elbow diagram; therefore, these values were chosen as the numbers of clusters.
+
+### Creating Clustering Models
+
+```{r}
+
+model.k7 <- ml_bisecting_kmeans(dataset.clustering, ~Blurred_Longitude + Blurred_Latitude, k = 7, seed = 1, max_iter = 10)
+clusters.k7 <- ml_predict(model.k7, dataset.clustering)
+
+model.k10 <- ml_bisecting_kmeans(dataset.clustering, ~Blurred_Longitude + Blurred_Latitude, k = 10, seed = 1, max_iter = 10)
+clusters.k10 <- ml_predict(model.k10, dataset.clustering)
+```
+
+### Examining the Cluster Structure
+
+- Examining the structure of clusters involves analyzing several parameters, including:
+  1. Cluster Centroid – The central point representing the cluster.
+  2. Cluster Size and Density – Refers to the number of instances within a cluster and how tightly they are grouped together.
+  3. Cluster Variance (Spread) – Represents the dispersion of values within a cluster. Low variance indicates that the values are concentrated around the centroid.
+  4. Inter-cluster Distance – Represents the distance between the centroids of two clusters.
+  5. Intra-cluster Similarity – Indicates how close the values within a cluster are to each other.
+
+##### Cluster Structure for k = 7
+
+```{r}
+variance_within_clusters <- function(data) {
+  data %>%
+    group_by(prediction) %>%
+    summarise(across(c(Blurred_Longitude, Blurred_Latitude), var))
+}
+
+cluster_summary <- function(data) {
+  data %>%
+    group_by(prediction) %>%
+    summarise(across(c(Blurred_Longitude, Blurred_Latitude), list(mean = mean, sd = sd, median = median)))
+}
+
+centers.k7 <- model.k7$centers
+sizes.k7 <- table(dplyr::pull(clusters.k7, prediction))
+variance.k7 <- variance_within_clusters(clusters.k7)
+summary.k7 <- cluster_summary(clusters.k7)
+
+print(centers.k7)
+print(sizes.k7)
+print(variance.k7)
+print(summary.k7)
+```
+
+##### Cluster Structure for k = 10
+
+```{r}
+centers.k10 <- model.k10$centers
+sizes.k10 <- table(dplyr::pull(clusters.k10, prediction))
+variance.k10 <- variance_within_clusters(clusters.k10)
+summary.k10 <- cluster_summary(clusters.k10)
+
+print(centers.k10)
+print(sizes.k10)
+print(variance.k10)
+print(summary.k10)
+```
+
+### Visualization of Clusters
+
+```{r}
+plot_clusters <- function(data, centers, title) {
+  ggplot(data, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = as.factor(prediction))) +
+    geom_point(size = 2) +
+    geom_point(data = centers, aes(x = Blurred_Longitude, y = Blurred_Latitude), color = "black", size = 3, shape = 4) +
+    labs(color = "Cluster", title = title, x = "Longitude", y = "Latitude") +
+    theme_minimal() +
+    theme(text = element_text(size = 16))
+}
+
+
+sample_data.k7 <- clusters.k7 %>% sample_frac(0.01)
+sample_data.k10 <- clusters.k10 %>% sample_frac(0.01)
+heatmap3 <- plot_clusters(collect(sample_data.k7), centers.k7, "Density Heatmap for K=7")
+heatmap4 <- plot_clusters(collect(sample_data.k10), centers.k10, "Density Heatmap for K=10")
+
+ggsave("heatmap3.jpg", heatmap3)
+ggsave("heatmap4.jpg", heatmap4)
+
+include_graphics(c("heatmap3.jpg", "heatmap4.jpg"))
+```
+
+### Displaying the relationship between the values of individual features and clusters
+
+##### Relationship between the Final Incident Category and clusters for k = 7
+
+``` {r}
+ggplot(data = collect(sample_data.k7), aes(x = as.factor(prediction))) +
+  geom_bar(aes(fill = Final_Category), position = "fill") +
+  labs(x = "Cluster", y = "Proportion", title = "Distribution of Final Categories within Clusters") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+```
+
+- It can be observed that for different parts of the city of Seattle (represented by clusters), there is an even distribution of incidents.
+
+##### Relationship between Police Department and clusters for k = 7
+
+``` {r}
+# Precinct and Cluster
+ggplot(data = collect(sample_data.k7), aes(x = as.factor(prediction))) +
+  geom_bar(aes(fill = Precinct), position = "fill") +
+  labs(x = "Cluster", y = "Proportion", title = "Distribution of Police Departments within Clusters") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+```
+
+- By analyzing this distribution, it can be determined that certain police departments are responsible for specific parts of the city, which is logical.
+
+##### Relationship between the Final Incident Category and clusters for k = 10
+
+``` {r}
+ggplot(data = collect(sample_data.k10), aes(x = as.factor(prediction))) +
+  geom_bar(aes(fill = Final_Category), position = "fill") +
+  labs(x = "Cluster", y = "Proportion", title = "Distribution of Final Categories within Clusters") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+```
+
+- It can be observed that there is no relationship between specific parts of the city and the incidents that occur.
+
+##### Relationship between Police Department and clusters for k = 10
+
+``` {r}
+# Precinct and Cluster
+ggplot(data = collect(sample_data.k10), aes(x = as.factor(prediction))) +
+  geom_bar(aes(fill = Precinct), position = "fill") +
+  labs(x = "Cluster", y = "Proportion", title = "Distribution of Police Departments within Clusters") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+```
