@@ -675,7 +675,7 @@ cv_metrics %>%
 ##### Selection of the Most Suitable Model
 
 ```{r Testing the Performance of the Logistic Regression Model}
-# Na osnovu grafa se utvrdjuje da je model sa parametrom regularizacije 0.01 najbolji
+# Based on the graph, it is determined that the model with a regularization parameter of 0.01 is the best
 lmodel <- ml_logistic_regression(
   df_prepared_split$training,
   Response_Speed ~ .,
@@ -742,7 +742,7 @@ rf_cv_metrics %>%
 ##### Selection of the Most Suitable Model
 
 ```{r Testing the Performance of the Random Forest Model}
-# Selection of the Best Model
+# Selection of the best model
 
 rfmodel <- ml_random_forest_classifier(
   df_prepared_split$training,
