@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
 
 ### Dataset on Police Incidents in the City of Seattle
 
-The dataset on police incidents in the City of Seattle includes a collection of events related to 911 emergency calls recorded from 2010 to the present day. The dataset contains approximately 6 million records and has a total size of 5.6GB. It is an open dataset obtained from the official website of the City of Seattle and is available at the following
+The dataset on police incidents in the City of Seattle includes a collection of events related to 911 emergency calls recorded from 2010 to the present day. The dataset contains approximately 10 million records and has a total size of 5.6GB. It is an open dataset obtained from the official website of the City of Seattle and is available at the following
 [link](https://data.seattle.gov/Public-Safety/Call-Data/33kz-ixgy/about_data).
 
 This dataset contains information about calls made to the police and the corresponding police responses in Seattle. The columns in the dataset are as follows:
@@ -808,7 +808,7 @@ dt_cv_metrics %>%
 ##### Selection of the Most Suitable Model
 
 ```{r Testing the Performance of the Decision Tree Model}
-# Izbor najpovoljnijeg modela
+# Selection of the most suitable model
 
 dtmodel <- ml_decision_tree_classifier(
   df_prepared_split$training,
