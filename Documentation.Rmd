@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
 
 ### Dataset on Police Incidents in the City of Seattle
 
-The dataset on police incidents in the City of Seattle includes a collection of events related to 911 emergency calls recorded from 2010 to the present day. The dataset contains approximately 10 million records and has a total size of 5.6GB. It is an open dataset obtained from the official website of the City of Seattle and is available at the following
+The dataset on police incidents in the City of Seattle includes a collection of events related to 911 emergency calls recorded from 2009 to the present day. The dataset contains approximately 10 million records and has a total size of 5.6GB. It is an open dataset obtained from the official website of the City of Seattle and is available at the following
 [link](https://data.seattle.gov/Public-Safety/Call-Data/33kz-ixgy/about_data).
 
 This dataset contains information about calls made to the police and the corresponding police responses in Seattle. The columns in the dataset are as follows:
@@ -111,7 +111,7 @@ df_clean <- df_clean %>%
 
 -   This is an impossible case
 
-```{r}
+```{r Filtering Cases Where the Police Arrival Time Precedes the Incident Time}
 df_clean <- df_clean %>%
   filter(!is.na(Original_Time_Queued) & !is.na(Arrived_Time) & Original_Time_Queued < Arrived_Time)
 ```
@@ -122,7 +122,7 @@ rmarkdown::render("Documentation.Rmd")
 
 ### Displaying Statistical Information on Incident Times
 
-```{r}
+```{r Displaying Statistical Information on Incident Times}
 df_clean %>% summarise(
   min_original_time = min(Original_Time_Queued, na.rm = TRUE),
   max_original_time = max(Original_Time_Queued, na.rm = TRUE),
@@ -133,7 +133,7 @@ df_clean %>% summarise(
 
 ### Visualization of the Distribution by Police Precincts
 
-```{r}
+```{r Visualization of the Distribution by Police Precincts}
 precinct_counts <- df_clean %>%
   group_by(Precinct) %>%
   summarise(Count = n()) %>%
@@ -155,7 +155,7 @@ gc()
 
 ### Visualization of the Distribution by Case Resolution Type
 
-```{r}
+```{r Visualization of the Distribution by Case Resolution Type}
 clearence_counts <- df_clean %>%
   group_by(Event_Clearance_Description) %>%
   summarise(Count = n()) %>%
@@ -177,7 +177,7 @@ gc()
 
 ### Visualization of the Distribution by Priority
 
-```{r}
+```{r Visualization of the Distribution by Priority}
 priority_counts <- df_clean %>%
   group_by(Priority) %>%
   summarise(Count = n())
@@ -195,7 +195,7 @@ gc()
 
 ### Visualization of the Distribution by 911 Call Type
 
-```{r}
+```{r Visualization of the Distribution by 911 Call Type}
 call_type_counts <- df_clean %>%
   group_by(Call_Type) %>%
   summarise(Count = n())
@@ -259,8 +259,8 @@ df_clean_ll <- df_clean %>% filter(Blurred_Latitude >= 47 & Blurred_Latitude <= 
 
 ### Histograms of Latitude and Longitude Distribution for Cleaned Values
 
-```{r}
-# Sample 10% of cleaned location data for histogram
+```{r Histograms of Longitude Distribution for Cleaned Values}
+# Sample 50% of cleaned location data for histogram
 location_clean_sample <- df_clean_ll %>%
   select(Blurred_Longitude, Blurred_Latitude) %>%
   sdf_sample(fraction = 0.5, replacement = FALSE) %>%
@@ -276,8 +276,8 @@ rm(location_clean_sample)
 gc()
 ```
 
-```{r}
-# Sample 10% of cleaned location data for histogram
+```{r Histograms of Latitude Distribution for Cleaned Values}
+# Sample 50% of cleaned location data for histogram
 location_clean_sample <- df_clean_ll %>%
   select(Blurred_Longitude, Blurred_Latitude) %>%
   sdf_sample(fraction = 0.5, replacement = FALSE) %>%
@@ -316,9 +316,9 @@ include_graphics("Images/PointsOnTheMap.png")
 
 ### Visualization of Category Distribution
 
--   The next aspect to consider is the initial and final call categories represented by the columns Initial_Call_Type and  Final_Call_Type. Since Initial_Call_Type contains 287 different categories and Final_Call_Type contains 402 different categories, the idea is to group these categories into broader supercategories to make the data easier to analyze and visualize. The following code snippet shows the map_call_types function, which performs the grouping of these categories:
+-   The next aspect to consider is the initial and final call categories represented by the columns Initial_Call_Type and  Final_Call_Type. Since Initial_Call_Type contains 273 different categories and Final_Call_Type contains 245 different categories, the idea is to group these categories into broader supercategories to make the data easier to analyze and visualize. The following code snippet shows the map_call_types function, which performs the grouping of these categories:
 
-```{r}
+```{r Visualization of Category Distribution}
 df_collected <- df_clean_ll %>% 
   sdf_sample(fraction = 0.5, replacement = FALSE) %>% 
   collect()
@@ -329,7 +329,7 @@ print(length(unique(df_collected$Final_Call_Type)))
 
 -   The following code snippet shows the grouping of initial call categories into supercategories:
 
-```{r}
+```{r Grouping of initial call categories into supercategories}
 df_clean_ll <- df_clean_ll %>%
   mutate(Initial_Category = case_when(
     grepl("ASLT|Assault|ASSAULT|ASSAULTS|HARRASMENT|THREAT|THREATS|WEAPON|GUN|PANHANDLING|HARASSMENT|VIOLENT", Initial_Call_Type) ~ "Assaults and Threats",
@@ -351,7 +351,7 @@ df_clean_ll <- df_clean_ll %>%
 
 -   Application to the final call category as well:
 
-```{r}
+```{r Grouping of final call categories into supercategories}
 df_clean_ll <- df_clean_ll %>%
   mutate(Final_Category = case_when(
     grepl("ASLT|Assault|ASSAULT|ASSAULTS|HARRASMENT|THREAT|THREATS|WEAPON|GUN|PANHANDLING|HARASSMENT|VIOLENT", Final_Call_Type) ~ "Assaults and Threats",
@@ -373,7 +373,7 @@ df_clean_ll <- df_clean_ll %>%
 
 -   Since it is possible that the initial categorization made by the 911 operator does not match the final categorization of the incident made by the police officer, the following diagram shows the distribution of cases where the final categorization matched the initial one, and vice versa:
 
-```{r}
+```{r Distribution of cases where the final categorization matched the initial one}
 same_diff_counts <- df_clean_ll %>%
   group_by(Same_Category = ifelse(Initial_Category == Final_Category, "Same", "Different")) %>%
   summarise(Count = n())
@@ -431,7 +431,7 @@ gc()
 ```{r Relationship between final category and geographic location}
 location_final_sample <- df_clean_ll %>%
   select(Blurred_Longitude, Blurred_Latitude, Final_Category) %>%
-  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 1% of data
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 50% of data
   collect()
 
 ggplot(location_final_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Final_Category)) +
@@ -454,7 +454,7 @@ gc()
 ```{r Relationship between Seattle city sector and geographic location}
 location_final_sample <- df_clean_ll %>%
   select(Blurred_Longitude, Blurred_Latitude, Sector) %>%
-  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 1% of data
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%  # Sample 50% of data
   collect()
 
 ggplot(location_final_sample, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = Sector)) +
@@ -500,7 +500,7 @@ gc()
 
 ### Calculating Response Time to an Incident
 
-```{r}
+```{r Calculating Response Time to an Incident}
 df_times <- df_clean_ll %>%
   mutate(
     Response_Time = (unix_timestamp(Arrived_Time) - unix_timestamp(Original_Time_Queued)) / 60
@@ -509,7 +509,7 @@ df_times <- df_clean_ll %>%
 
 ### Histogram Visualization to Examine the Distribution of Response Times
 
-```{r}
+```{r Histogram Visualization to Examine the Distribution of Response Times}
 # Plot histogram with 5-minute bins
 df_times_filtered <- df_times %>% filter(Response_Time >= 0 & Response_Time <= 1000)
 
@@ -532,7 +532,7 @@ gc()
 
 ### Creating the Response Speed Label
 
-```{r}
+```{r Creating the Response Speed Label}
 # Calculate median in Spark without collecting all data
 median_result <- df_times_filtered %>%
   summarise(median_time = percentile_approx(Response_Time, 0.5)) %>%
@@ -547,7 +547,7 @@ df_prepared <- df_times_filtered %>%
 
 ### Distribution of Response Speed
 
-```{r}
+```{r Distribution of Response Speed}
 response_speeds <- df_prepared %>%
   group_by(Response_Speed) %>%
   summarise(Count = n()) %>%
@@ -568,11 +568,11 @@ gc()
 
 - The next section aims to show how different values of the predictor features affect the speed of police response to a call. The following code snippet is intended to illustrate how priority, initial call category, location, and sector influence response times.
 
-```{r}
+```{r Visualization of the Relationship Between Predictor Features and the Target Feature}
 viz_sample <- df_prepared %>%
   select(Priority, Initial_Category, Blurred_Longitude, Blurred_Latitude, 
          Sector, Response_Time, Response_Speed) %>%
-  sdf_sample(fraction = 0.05, replacement = FALSE) %>%
+  sdf_sample(fraction = 0.5, replacement = FALSE) %>%
   collect()
 
 ggplot(viz_sample, aes(x = Priority, y = Response_Time)) +
@@ -663,7 +663,7 @@ print(cv_metrics)
 
 ##### Display of Logistic Regression Model Performance for Different Scenarios
 
-``` {r}
+``` {r Display of Logistic Regression Model Performance for Different Scenarios}
 cv_metrics %>% 
   ggplot(aes(reg_param_1, areaUnderROC)) + 
   geom_line() + 
@@ -730,7 +730,7 @@ print(rf_cv_metrics)
 
 ##### Display of Random Forest Model Performance for Different Scenarios
 
-``` {r}
+``` {r Display of Random Forest Model Performance for Different Scenarios}
 rf_cv_metrics %>% 
   ggplot(aes(num_trees_1, areaUnderROC)) + 
   geom_line() + 
@@ -795,7 +795,7 @@ print(dt_cv_metrics)
 
 ##### Display of Decision Tree Model Performance for Different Scenarios
 
-``` {r}
+``` {r Display of Decision Tree Model Performance for Different Scenarios}
 dt_cv_metrics %>% 
   ggplot(aes(max_depth_1, areaUnderROC)) + 
   geom_line() + 
@@ -826,7 +826,7 @@ dtmx <- dtmodel %>%
 
 - To assess the performance of the different models, the Area Under ROC and Area Under PR metrics were used.
 
-```{r}
+```{r Evaluating the Classification Performance of Different Methods}
 
 metrics_df <- data.frame(
   model = c("Logistic Regression", "Random Forest", "Decision Tree"),
@@ -870,7 +870,7 @@ ggplot(metrics_df, aes(x = model, y = pr_auc, fill = model)) +
 
 - During dataset preparation, geographic latitude and longitude were extracted, as they will initially be used to determine an appropriate number of clusters.
 
-```{r}
+```{r Preparing the Data for Clustering}
 dataset.clustering <- df_times %>%
   select(Blurred_Longitude, Blurred_Latitude, Final_Category, Precinct)
 
@@ -880,7 +880,7 @@ dataset.clustering <- df_times %>%
 
 - To determine the most suitable number of clusters, the Elbow method was applied, which shows the sum of squared errors for specified numbers of clusters.
 
-```{r}
+```{r Determining the Optimal Cluster Size Using the Elbow Method}
 # Function that calculates the within-cluster sum of squares
 
 calculate_wcss <- function(data, max_k) {
@@ -916,7 +916,7 @@ ggplot(wcss_df, aes(x = k, y = WCSS)) +
 
 ### Creating Clustering Models
 
-```{r}
+```{r Creating Clustering Models}
 
 model.k7 <- ml_bisecting_kmeans(dataset.clustering, ~Blurred_Longitude + Blurred_Latitude, k = 7, seed = 1, max_iter = 10)
 clusters.k7 <- ml_predict(model.k7, dataset.clustering)
@@ -976,7 +976,7 @@ print(summary.k10)
 
 ### Visualization of Clusters
 
-```{r}
+```{r Visualization of Clusters}
 plot_clusters <- function(data, centers, title) {
   ggplot(data, aes(x = Blurred_Longitude, y = Blurred_Latitude, color = as.factor(prediction))) +
     geom_point(size = 2) +
